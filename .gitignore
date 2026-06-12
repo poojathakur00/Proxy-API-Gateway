@@ -1,0 +1,11 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Build artifacts
+*.zip
+requests-layer/python/
+
+# OS
+.DS_Store
