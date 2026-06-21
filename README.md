@@ -37,7 +37,7 @@ The key idea: external clients call a single API Gateway endpoint. Lambda fetche
 
 ## Components
 
-### 1. Databricks Flask App
+### 1. Databricks Flask App 
 
 A simple Flask REST API hosted on Databricks Apps with three endpoints:
 

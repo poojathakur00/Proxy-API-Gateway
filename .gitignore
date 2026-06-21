@@ -7,5 +7,10 @@
 *.zip
 requests-layer/python/
 
+# Python
+venv/
+__pycache__/
+*.pyc
+
 # OS
 .DS_Store
