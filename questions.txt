@@ -1,0 +1,2 @@
+How dowe configure the secrets in the secrets manager ? 
+Not mentioned in swagger document
