@@ -71,6 +71,13 @@ resource "aws_iam_role_policy" "lambda_access" {
   })
 }
 
+resource "aws_lambda_layer_version" "requests" {
+  filename            = "${path.module}/requests-layer/requests-layer.zip"
+  layer_name          = "${var.project}-requests-layer"
+  compatible_runtimes = ["python3.13"]
+  source_code_hash    = filebase64sha256("${path.module}/requests-layer/requests-layer.zip")
+}
+
 resource "aws_lambda_function" "proxy" {
   filename         = "${path.module}/lambda.zip"
   function_name    = "${var.project}-router"
@@ -80,9 +87,7 @@ resource "aws_lambda_function" "proxy" {
   timeout          = 30
   source_code_hash = filebase64sha256("${path.module}/lambda.zip")
 
-  layers = [
-    "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:layer:requests-layer:2"
-  ]
+  layers = [aws_lambda_layer_version.requests.arn]
 
   environment {
     variables = {

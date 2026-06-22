@@ -9,14 +9,37 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  onboard:
+  discover:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r scripts/requirements.txt
+      - id: list
+        run: echo "matrix=$(python scripts/list_apps.py)" >> "$GITHUB_OUTPUT"
+
+  onboard:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     env:
       AWS_REGION: us-east-2
       # Set these as repo Variables (Settings > Secrets and variables > Actions > Variables)
       # using the values from `terraform output`.
       ROUTES_TABLE: ${{ vars.ROUTES_TABLE }}
       USAGE_PLAN_ID: ${{ vars.USAGE_PLAN_ID }}
+      # Per-app credentials, looked up by secret_key (see scripts/list_apps.py).
+      # Add as repo secrets named DBX_HOST_<SECRET_KEY> etc. Optional: if any
+      # are missing, onboard.py leaves the app disabled with an empty secret.
+      DBX_HOST: ${{ secrets[format('DBX_HOST_{0}', matrix.secret_key)] }}
+      DBX_CLIENT_ID: ${{ secrets[format('DBX_CLIENT_ID_{0}', matrix.secret_key)] }}
+      DBX_CLIENT_SECRET: ${{ secrets[format('DBX_CLIENT_SECRET_{0}', matrix.secret_key)] }}
+      DBX_APP_URL: ${{ secrets[format('DBX_APP_URL_{0}', matrix.secret_key)] }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,9 +57,5 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Onboard every swagger
-        run: |
-          for f in swagger/*.yaml; do
-            echo "=== $f ==="
-            python scripts/onboard.py "$f"
-          done
+      - name: Onboard ${{ matrix.slug }}
+        run: python scripts/onboard.py "${{ matrix.file }}"

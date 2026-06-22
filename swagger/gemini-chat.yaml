@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: Gemini Chat
+  description: >
+    A simple chat API backed by Google's Gemini API (gemini-2.5-flash-lite). Send a message and receive a response. Built with FastAPI on Databricks Apps; all API routes live under /api per Databricks Apps OAuth2 bearer-token authentication requirements.
+  version: 1.0.0
+servers:
+  - url: https://{app-host}
+    description: Databricks Apps deployment
+    variables:
+      app-host:
+        default: your-app-name-1234567890.aws.databricksapps.com
+
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                basic:
+                  value:
+                    status: "ok"
+                    timestamp: "2026-06-22T14:30:00Z"
+
+  /api/ask:
+    post:
+      summary: Ask a question and get a short answer
+      operationId: askQuestion
+      tags:
+        - Q&A
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+            examples:
+              basic:
+                value:
+                  question: "What is the capital of France?"
+      responses:
+        '200':
+          description: Successful answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerResponse'
+              examples:
+                basic:
+                  value:
+                    answer: "Paris."
+                    character_count: 6
+                    model: "gemini-2.5-flash-lite"
+        '400':
+          description: Invalid request (e.g. empty question)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upstream Gemini API error or server misconfiguration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    QuestionRequest:
+      type: object
+      required:
+        - question
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: The question to ask, in natural language.
+          example: "What is the capital of France?"
+
+    AnswerResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+          maxLength: 300
+          description: Gemini's answer, truncated to 300 characters.
+          example: "Paris."
+        character_count:
+          type: integer
+          description: Length of the returned answer string.
+          example: 6
+        model:
+          type: string
+          description: The Gemini model used to generate the answer.
+          example: "gemini-2.5-flash-lite"
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "ok"
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message.
+          example: "GEMINI_API_KEY is not configured."
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Databricks OAuth 2.0 access token. Required for calling /api routes
+        from outside the browser (e.g. Postman, external services, other
+        Databricks Apps). Generate via `databricks auth token` or service
+        principal client-credentials flow.

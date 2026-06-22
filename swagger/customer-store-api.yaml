@@ -188,7 +188,25 @@ paths:
           type: string
         example: O6EA8B016
   
-    
+    delete:
+      tags: [Orders]
+      summary: Delete an entire order
+      operationId: delete_order
+      responses:
+        '200':
+          description: Order deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Order deleted
+                  order:
+                    $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFound'
     
   /api/orders/{order_id}/items:
     parameters:

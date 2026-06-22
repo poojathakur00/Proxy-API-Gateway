@@ -57,6 +57,28 @@ def attach_key(usage_plan_id, key_id):
         print("  key already attached")
 
 
+def credentials_from_env():
+    """Read DBX_HOST/CLIENT_ID/CLIENT_SECRET/APP_URL from env, if all present."""
+    values = {
+        "DBX_HOST": os.environ.get("DBX_HOST", ""),
+        "DBX_CLIENT_ID": os.environ.get("DBX_CLIENT_ID", ""),
+        "DBX_CLIENT_SECRET": os.environ.get("DBX_CLIENT_SECRET", ""),
+        "DBX_APP_URL": os.environ.get("DBX_APP_URL", ""),
+    }
+    return values if all(values.values()) else None
+
+
+def upsert_secret(secret_name, values):
+    """Create or update the secret with real values. Idempotent."""
+    body = json.dumps(values)
+    try:
+        secrets.create_secret(Name=secret_name, SecretString=body)
+        print(f"  secret created: {secret_name}")
+    except secrets.exceptions.ResourceExistsException:
+        secrets.put_secret_value(SecretId=secret_name, SecretString=body)
+        print(f"  secret updated: {secret_name}")
+
+
 def ensure_secret_shell(secret_name):
     """Create an empty secret to be filled in manually. Idempotent."""
     try:
@@ -76,16 +98,22 @@ def ensure_secret_shell(secret_name):
         print(f"  secret exists: {secret_name}")
 
 
-def put_route(key_value, secret_name):
+def get_existing_route(key_value):
+    """Return the current route item for this key, or None if not onboarded yet."""
+    resp = ddb.get_item(TableName=ROUTES_TABLE, Key={"api_key_id": {"S": key_value}})
+    return resp.get("Item")
+
+
+def put_route(key_value, secret_name, enabled):
     ddb.put_item(
         TableName=ROUTES_TABLE,
         Item={
             "api_key_id": {"S": key_value},
             "secret_name": {"S": secret_name},
-            "enabled": {"BOOL": False},
+            "enabled": {"BOOL": enabled},
         },
     )
-    print(f"  route written (enabled=false): {secret_name}")
+    print(f"  route written (enabled={enabled}): {secret_name}")
 
 
 def main(swagger_path):
@@ -102,15 +130,29 @@ def main(swagger_path):
 
     key_id, key_value = get_or_create_key(key_name)
     attach_key(USAGE_PLAN_ID, key_id)
-    ensure_secret_shell(secret_name)
-    put_route(key_value, secret_name)
 
-    print("\nDONE (app is DISABLED). API key for this app:")
-    print(f"  {key_value}")
-    print("\nNext, to go live:")
-    print(f"  1. Fill the secret {secret_name} with real values")
-    print(f"     (DBX_HOST, DBX_CLIENT_ID, DBX_CLIENT_SECRET, DBX_APP_URL)")
-    print(f"  2. Set the DynamoDB row's enabled=true for api_key_id={key_value}")
+    creds = credentials_from_env()
+    existing = get_existing_route(key_value)
+
+    if creds:
+        upsert_secret(secret_name, creds)
+        put_route(key_value, secret_name, enabled=True)
+        print("\nDONE (app is ENABLED, credentials loaded from env).")
+    elif existing:
+        # Already onboarded; no new creds given this run — leave secret and
+        # enabled flag exactly as they are (e.g. set manually earlier).
+        print(f"  route already exists, leaving as-is (enabled={existing['enabled']['BOOL']})")
+        print("\nDONE (no changes; no credentials provided, app already onboarded).")
+    else:
+        ensure_secret_shell(secret_name)
+        put_route(key_value, secret_name, enabled=False)
+        print("\nDONE (app is DISABLED, no credentials provided).")
+        print(f"To go live:")
+        print(f"  1. Fill the secret {secret_name} with real values")
+        print(f"     (DBX_HOST, DBX_CLIENT_ID, DBX_CLIENT_SECRET, DBX_APP_URL)")
+        print(f"  2. Set the DynamoDB row's enabled=true for api_key_id={key_value}")
+
+    print(f"\nAPI key for this app: {key_value}")
 
 
 if __name__ == "__main__":
