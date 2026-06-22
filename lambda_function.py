@@ -43,6 +43,7 @@ def get_token(dbx_host, client_id, client_secret):
         f"{dbx_host}/oidc/v1/token",
         data={"grant_type": "client_credentials", "scope": "all-apis"},
         auth=(client_id, client_secret),
+        timeout=10,
     )
     resp.raise_for_status()
     return resp.json()["access_token"]
@@ -69,23 +70,40 @@ def lambda_handler(event, context):
         return respond(403, {"error": "app disabled"})
 
     secret = get_secret(config["secret_name"])
-    token = get_token(
-        secret["DBX_HOST"], secret["DBX_CLIENT_ID"], secret["DBX_CLIENT_SECRET"]
-    )
 
-    # Forward the original request unchanged to the app's backend.
+    try:
+        token = get_token(
+            secret["DBX_HOST"], secret["DBX_CLIENT_ID"], secret["DBX_CLIENT_SECRET"]
+        )
+    except requests.exceptions.Timeout:
+        return respond(504, {"error": "timed out getting token from Databricks"})
+    except requests.exceptions.RequestException as e:
+        return respond(502, {"error": f"failed to authenticate with Databricks: {e}"})
+
     method = event.get("httpMethod", "GET")
     path = event.get("path", "/")
     query = event.get("queryStringParameters") or None
     body = event.get("body")
 
-    resp = requests.request(
-        method=method,
-        url=f"{secret['DBX_APP_URL']}{path}",
-        headers={"Authorization": f"Bearer {token}"},
-        params=query,
-        json=json.loads(body) if body else None,
-    )
+    try:
+        parsed_body = json.loads(body) if body else None
+    except json.JSONDecodeError:
+        return respond(400, {"error": "request body is not valid JSON"})
+
+    # Forward the original request unchanged to the app's backend.
+    try:
+        resp = requests.request(
+            method=method,
+            url=f"{secret['DBX_APP_URL']}{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            params=query,
+            json=parsed_body,
+            timeout=15,
+        )
+    except requests.exceptions.Timeout:
+        return respond(504, {"error": "backend app timed out"})
+    except requests.exceptions.RequestException as e:
+        return respond(502, {"error": f"failed to reach backend app: {e}"})
 
     return {
         "statusCode": resp.status_code,
