@@ -122,8 +122,15 @@ This step lets you onboard apps by just pushing a swagger file.
    - writes/updates the app's secret in Secrets Manager (if creds were given)
    - writes a DynamoDB row mapping the API key to the secret, `enabled=true/false`
 
-4. Find the app's API key in the workflow run logs. Give that key to
-   whoever will call the proxy — they send it as the `x-api-key` header.
+4. The workflow logs mask the API key (it's not safe to print in CI logs,
+   which anyone with repo read-access can see). Fetch it directly from AWS
+   instead — it lives in **API Gateway → API Keys**, not Secrets Manager
+   (Secrets Manager only holds the Databricks credentials):
+   ```bash
+   aws apigateway get-api-keys --name-query <slug> --include-values --query 'items[0].value' --output text
+   ```
+   Give that key to whoever will call the proxy — they send it as the
+   `x-api-key` header.
 
 ## Step 4 — Test it
 

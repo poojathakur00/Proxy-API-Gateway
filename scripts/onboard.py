@@ -36,13 +36,20 @@ def slugify(title):
     return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
 
 
+def mask(value):
+    """Tell the GitHub Actions runner to redact this value from all log output."""
+    print(f"::add-mask::{value}")
+
+
 def get_or_create_key(name):
     """Reuse an existing key with this name, else create one. Idempotent."""
     for k in apigw.get_api_keys(nameQuery=name, includeValues=True)["items"]:
         if k["name"] == name:
+            mask(k["value"])
             print(f"  key exists: {k['id']}")
             return k["id"], k["value"]
     k = apigw.create_api_key(name=name, enabled=True)
+    mask(k["value"])
     print(f"  key created: {k['id']}")
     return k["id"], k["value"]
 

@@ -18,3 +18,25 @@ variable "secret_prefix" {
   default     = "databricks/"
 }
 
+# Usage plan quota/throttle. Tracked per API key, so this is effectively a
+# per-app limit even though all apps share one usage plan.
+variable "quota_limit" {
+  description = "Max requests per app per quota_period"
+  default     = 100
+}
+
+variable "quota_period" {
+  description = "Quota reset period: DAY, WEEK, or MONTH"
+  default     = "DAY"
+}
+
+variable "throttle_rate_limit" {
+  description = "Steady-state requests/sec allowed per app"
+  default     = 5
+}
+
+variable "throttle_burst_limit" {
+  description = "Max burst requests allowed per app"
+  default     = 10
+}
+

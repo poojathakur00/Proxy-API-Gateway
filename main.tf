@@ -170,4 +170,15 @@ resource "aws_api_gateway_usage_plan" "main" {
     api_id = aws_api_gateway_rest_api.proxy.id
     stage  = aws_api_gateway_stage.main.stage_name
   }
+
+  # Limits apply per API key, so each app gets its own quota/throttle.
+  quota_settings {
+    limit  = var.quota_limit
+    period = var.quota_period
+  }
+
+  throttle_settings {
+    rate_limit  = var.throttle_rate_limit
+    burst_limit = var.throttle_burst_limit
+  }
 }

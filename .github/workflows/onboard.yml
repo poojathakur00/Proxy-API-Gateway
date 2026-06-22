@@ -15,12 +15,21 @@ jobs:
       matrix: ${{ steps.list.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -r scripts/requirements.txt
       - id: list
-        run: echo "matrix=$(python scripts/list_apps.py)" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.event.after }}" -- 'swagger/*.yaml')
+          else
+            CHANGED=""
+          fi
+          echo "changed files: $CHANGED"
+          echo "matrix=$(python scripts/list_apps.py $CHANGED)" >> "$GITHUB_OUTPUT"
 
   onboard:
     needs: discover
